@@ -1,6 +1,8 @@
 import argparse
 import json
+from pathlib import Path
 from typing import Dict
+
 from calculate_debit_attendance import calculate_debit_from_file
 from calculate_overtime import calculate_total_overtime_from_file
 from src.utils import OUTPUT_FOLDER
@@ -38,7 +40,9 @@ def main() -> None:
     payload = json.dumps({"overtime_to_be_paid_in_rupiah": overtime_to_be_paid, "remaining_debit_hours": remaining_debit}, ensure_ascii=False, indent=2)
 
     if args.out:
-        with open(OUTPUT_FOLDER + args.out, "w", encoding="utf-8") as handle:
+        output_path = Path(OUTPUT_FOLDER) / args.out
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as handle:
             handle.write(payload)
     else:
         print(payload)

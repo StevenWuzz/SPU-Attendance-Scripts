@@ -4,11 +4,11 @@
 import argparse
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from utils import MULAI_LEMBUR, SELESAI_LEMBUR
 from src.filter_report import generate_filtered_report
-from src.utils import OUTPUT_FOLDER, parse_datetime
+from src.utils import MULAI_LEMBUR, SELESAI_LEMBUR, OUTPUT_FOLDER, parse_datetime
 
 OVERTIME_TYPES = {MULAI_LEMBUR, SELESAI_LEMBUR}
 
@@ -107,7 +107,9 @@ def main() -> None:
     payload = json.dumps({"total_overtime_hours": totals, "overtime_sessions": durations}, ensure_ascii=False, indent=2)
 
     if args.out:
-        with open(OUTPUT_FOLDER + args.out, "w", encoding="utf-8") as handle:
+        output_path = Path(OUTPUT_FOLDER) / args.out
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as handle:
             handle.write(payload)
     else:
         print(payload)

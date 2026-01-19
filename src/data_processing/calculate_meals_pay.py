@@ -1,5 +1,6 @@
 import argparse
 import json
+from pathlib import Path
 from datetime import datetime, time
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -104,7 +105,9 @@ def main() -> None:
 
     meal_calculation = calculate_meal_pay_from_file(args.input)
     if args.out:
-        with open(OUTPUT_FOLDER + args.out, "w", encoding="utf-8") as handle:
+        output_path = Path(OUTPUT_FOLDER) / args.out
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as handle:
             handle.write(meal_calculation)
     else:
         print(meal_calculation)

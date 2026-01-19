@@ -4,6 +4,7 @@
 import argparse
 import json
 from datetime import datetime, time
+from pathlib import Path
 from typing import Dict
 
 from src.filter_report import generate_filtered_report
@@ -79,7 +80,9 @@ def main() -> None:
     output = json.dumps({"attendance": json_data, "debit_hours": statistics}, ensure_ascii=False, indent=2)
     
     if args.out:
-        with open(OUTPUT_FOLDER + args.out, "w", encoding="utf-8") as handle:
+        output_path = Path(OUTPUT_FOLDER) / args.out
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as handle:
             handle.write(output)
     else:
         print(output)

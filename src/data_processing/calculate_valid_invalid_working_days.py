@@ -2,6 +2,7 @@ import argparse
 import json
 from calendar import monthrange
 from datetime import datetime, time
+from pathlib import Path
 from typing import Dict, List
 
 from src.filter_report import generate_filtered_report
@@ -149,7 +150,9 @@ def main() -> None:
 
     output = calculate_valid_invalid_working_days_from_file(args.input)
     if args.out:
-        with open(OUTPUT_FOLDER + args.out, "w", encoding="utf-8") as handle:
+        output_path = Path(OUTPUT_FOLDER) / args.out
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as handle:
             handle.write(output)
     else:
         print(output)
