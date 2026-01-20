@@ -5,12 +5,16 @@ OUTPUT_FOLDER = "outputs/"
 
 ABSENSI_MASUK = "Absensi Masuk"
 ABSENSI_PULANG = "Absensi Pulang"
-A_IN = "A IN"
-A_OUT = "A OUT"
 MULAI_KERJA_DI_RUMAH = "Mulai Kerja di Rumah"
 SELESAI_KERJA_DI_RUMAH = "Selesai Kerja di Rumah"
 MULAI_LEMBUR = "Mulai Lembur"
 SELESAI_LEMBUR = "Selesai Lembur"
+MULAI_ISTIRAHAT = "Mulai Istirahat"
+SELESAI_ISTIRAHAT = "Selesai Istirahat"
+A_IN = "A IN"
+A_OUT = "A OUT"
+C_IN = "C IN"
+C_OUT = "C OUT"
 
 def parse_datetime(value: str) -> Optional[datetime]:
     """Parse a datetime string in YYYY-MM-DD HH:MM[:SS] format."""
