@@ -5,7 +5,15 @@ from datetime import date, datetime, time
 from typing import Dict, List, Tuple, Union, Set
 
 from src.filter_report import generate_filtered_report
-from src.utils import OUTPUT_FOLDER, parse_datetime, MULAI_ISTIRAHAT, SELESAI_ISTIRAHAT, C_IN, C_OUT
+from src.utils import (
+    OUTPUT_FOLDER,
+    format_datetime,
+    parse_datetime,
+    MULAI_ISTIRAHAT,
+    SELESAI_ISTIRAHAT,
+    C_IN,
+    C_OUT,
+)
 
 MEAL_TYPES = {MULAI_ISTIRAHAT, SELESAI_ISTIRAHAT, C_IN, C_OUT}
 C_IN_LATEST = time(9, 1)
@@ -22,13 +30,14 @@ def calculate_meal_pay_from_file(input_file = "report_scan_gps_2025-12-01_2025-1
     
     for employee, records in filtered_records.items():
         entitled_meals_count = 0
+        parsed_dates: List[datetime] = []
         meal_sessions: List[Dict[str, Union[float, bool]]] = []
-        lunch_break_end_by_date: Dict[date, Tuple[datetime, str]] = {}
-        entitled_types_by_date: Dict[date, Set[str]] = {}
-        c_in_out_by_date: Dict[date, Set[str]] = {}
-        parsed_records: List[Tuple[str, datetime, str]] = []
+        entitled_meals_by_date: Dict[date, Set[str]] = {}
+        latest_c_in_by_date: Dict[date, datetime] = {}
+        earliest_c_out_by_date: Dict[date, datetime] = {}
+        latest_lunch_break_end_by_date: Dict[date, datetime] = {}
+        earliest_lunch_break_start_by_date: Dict[date, datetime] = {}
 
-        # Precompute C IN/C OUT presence per date for lunch eligibility.
         for record in records:
             if len(record) < 2:
                 continue
@@ -41,72 +50,81 @@ def calculate_meal_pay_from_file(input_file = "report_scan_gps_2025-12-01_2025-1
             if not parsed:
                 continue
 
-            parsed_records.append((meal_type, parsed, recorded_time))
-            if meal_type in {C_IN, C_OUT}:
-                date_key = parsed.date()
-                c_in_out_by_date.setdefault(date_key, set()).add(meal_type)
-
-        for meal_type, parsed, recorded_time in parsed_records:
             date_key = parsed.date()
+            parsed_dates.append(date_key)
+            if meal_type == C_IN and date_key not in latest_c_in_by_date:
+                latest_c_in_by_date[date_key] = parsed
+            elif meal_type == C_OUT:
+                earliest_c_out_by_date[date_key] = parsed
+            elif meal_type == MULAI_ISTIRAHAT:
+                earliest_lunch_break_start_by_date[date_key] = parsed
+            elif meal_type == SELESAI_ISTIRAHAT and date_key not in latest_lunch_break_end_by_date:
+                latest_lunch_break_end_by_date[date_key] = parsed
 
-            if meal_type == SELESAI_ISTIRAHAT:
-                if date_key not in lunch_break_end_by_date:
-                    lunch_break_end_by_date[date_key] = (parsed, recorded_time)
+        for date_key in parsed_dates:
+            latest_c_in = latest_c_in_by_date.get(date_key)
+            is_eligible_breakfast = (
+                latest_c_in is not None
+                and latest_c_in < datetime.combine(date_key, C_IN_LATEST)
+            )
+            is_entitled_breakfast = False
+            if is_eligible_breakfast and BREAKFAST not in entitled_meals_by_date.get(date_key, set()):
+                is_entitled_breakfast = True
+                entitled_meals_count += 1
+                entitled_meals_by_date.setdefault(date_key, set()).add(BREAKFAST)
+            meal_sessions.append(
+                {
+                    "meal_type": BREAKFAST,
+                    "check_in_time": format_datetime(latest_c_in) if latest_c_in else None,
+                    "is_eligible": is_eligible_breakfast,
+                    "is_entitled": is_entitled_breakfast
+                }
+            )
+
+            earliest_c_out = earliest_c_out_by_date.get(date_key)
+            is_eligible_dinner = (
+                earliest_c_out is not None
+                and earliest_c_out >= datetime.combine(date_key, C_OUT_EARLIEST)
+            )
+            is_entitled_dinner = False
+            if is_eligible_dinner and DINNER not in entitled_meals_by_date.get(date_key, set()):
+                is_entitled_dinner = True
+                entitled_meals_count += 1
+                entitled_meals_by_date.setdefault(date_key, set()).add(DINNER)
+            meal_sessions.append(
+                {
+                    "meal_type": DINNER,
+                    "check_out_time": format_datetime(earliest_c_out) if earliest_c_out else None,
+                    "is_eligible": is_eligible_dinner,
+                    "is_entitled": is_entitled_dinner
+                }
+            )
+
+            end_lunch_break = latest_lunch_break_end_by_date.get(date_key)
+            beginning_lunch_break = earliest_lunch_break_start_by_date.get(date_key)
+            if end_lunch_break is None or beginning_lunch_break is None:
                 continue
-
-            if meal_type == MULAI_ISTIRAHAT and date_key in lunch_break_end_by_date:
-                end_dt, end_time = lunch_break_end_by_date.pop(date_key)
-                hours = (end_dt - parsed).total_seconds() / 3600.0
-                has_c_in = C_IN in c_in_out_by_date.get(date_key, set())
-                has_c_out = C_OUT in c_in_out_by_date.get(date_key, set())
-                is_eligible_lunch = hours <= 1.0 and has_c_in and has_c_out
-                is_entitled_lunch = False
-                if is_eligible_lunch and LUNCH not in entitled_types_by_date.get(date_key, set()):
-                    is_entitled_lunch = True
-                    entitled_meals_count += 1
-                    entitled_types_by_date.setdefault(date_key, set()).add(LUNCH)
+            is_c_in_out_in_order = (
+                latest_c_in is not None
+                and earliest_c_out is not None
+                and latest_c_in < beginning_lunch_break
+                and end_lunch_break < earliest_c_out
+            )
+            lunch_duration = (end_lunch_break - beginning_lunch_break).total_seconds() / 3600.0
+            is_eligible_lunch = lunch_duration < (1.0 + 60/3600) and is_c_in_out_in_order
+            is_entitled_lunch = False
+            if is_eligible_lunch and LUNCH not in entitled_meals_by_date.get(date_key, set()):
+                is_entitled_lunch = True
+                entitled_meals_count += 1
+                entitled_meals_by_date.setdefault(date_key, set()).add(LUNCH)
                 meal_sessions.append(
                     {
                         "meal_type": LUNCH,
-                        "mulai": recorded_time,
-                        "selesai": end_time,
-                        "hours": hours,
+                        "mulai": format_datetime(beginning_lunch_break),
+                        "selesai": format_datetime(end_lunch_break),
+                        "duration": lunch_duration,
                         "is_eligible": is_eligible_lunch,
                         "is_entitled": is_entitled_lunch
-                    }
-                )
-                continue
-
-            if meal_type == C_OUT:
-                is_eligible_supper = parsed - datetime.combine(parsed.date(), C_OUT_EARLIEST) >= 0
-                is_entitled_supper = False
-                if is_eligible_supper and DINNER not in entitled_types_by_date.get(date_key, set()):
-                    is_entitled_supper = True
-                    entitled_meals_count += 1
-                    entitled_types_by_date.setdefault(date_key, set()).add(DINNER)
-                meal_sessions.append(
-                    {
-                        "meal_type": DINNER,
-                        "check_out_time": recorded_time,
-                        "is_eligible": is_eligible_supper,
-                        "is_entitled": is_entitled_supper
-                    }
-                )
-                continue
-
-            if meal_type == C_IN:
-                is_eligible_breakfast = parsed - datetime.combine(parsed.date(), C_IN_LATEST) < 0
-                is_entitled_breakfast = False
-                if is_eligible_breakfast and BREAKFAST not in entitled_types_by_date.get(date_key, set()):
-                    is_entitled_breakfast = True
-                    entitled_meals_count += 1
-                    entitled_types_by_date.setdefault(date_key, set()).add(BREAKFAST)
-                meal_sessions.append(
-                    {
-                        "meal_type": BREAKFAST,
-                        "check_in_time": recorded_time,
-                        "is_eligible": is_eligible_breakfast,
-                        "is_entitled": is_entitled_breakfast
                     }
                 )
         
@@ -114,8 +132,8 @@ def calculate_meal_pay_from_file(input_file = "report_scan_gps_2025-12-01_2025-1
         total_meal_count[employee] = entitled_meals_count
 
     return json.dumps({
-            "meal_hours_breakdown": meal_hours_breakdown, 
             "total_meal_count": total_meal_count,
+            "meal_hours_breakdown": meal_hours_breakdown,
         }, 
         ensure_ascii=False, 
         indent=2

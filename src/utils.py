@@ -59,3 +59,8 @@ def parse_time(value: str) -> Optional[time]:
             continue
 
     return None
+
+
+def format_datetime(value: datetime) -> str:
+    """Format a datetime value as YYYY-MM-DD HH:MM:SS."""
+    return value.strftime("%Y-%m-%d %H:%M:%S")
