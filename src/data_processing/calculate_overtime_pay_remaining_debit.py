@@ -3,11 +3,26 @@ import json
 from pathlib import Path
 from typing import Dict
 
-from calculate_debit_attendance import calculate_debit_from_file
-from calculate_overtime import calculate_total_overtime_from_file
+from .calculate_debit_attendance import calculate_debit_from_file
+from .calculate_overtime import calculate_total_overtime_from_file
 from src.utils import OUTPUT_FOLDER
 
 OVERTIME_RATE_PER_HOUR = 15000
+
+def calculate_overtime_pay_and_remaining_debit_from_file(input_path: str) -> str:
+    debit_data = json.loads(calculate_debit_from_file(input_path))
+    overtime_data = json.loads(calculate_total_overtime_from_file(input_path))
+    overtime_hours_data = overtime_data["total_overtime_hours"]
+
+    overtime_to_be_paid: Dict[str, float] = {}
+    remaining_debit: Dict[str, float] = {}
+    for employee, debit_hours in debit_data.items():
+        overtime_hours = overtime_hours_data.get(employee, 0.0)
+        overtime_to_be_paid[employee] = max(0.0, overtime_hours - debit_hours) * OVERTIME_RATE_PER_HOUR
+        remaining_debit[employee] = max(0.0, debit_hours - overtime_hours)
+
+    return json.dumps({"overtime_to_be_paid_in_rupiah": overtime_to_be_paid, "remaining_debit_hours": remaining_debit}, ensure_ascii=False, indent=2)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -26,18 +41,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    debit_data = json.loads(calculate_debit_from_file(args.input))
-    overtime_data = json.loads(calculate_total_overtime_from_file(args.input))
-    overtime_hours_data = overtime_data["total_overtime_hours"]
-
-    overtime_to_be_paid: Dict[str, float] = {}
-    remaining_debit: Dict[str, float] = {}
-    for employee, debit_hours in debit_data.items():
-        overtime_hours = overtime_hours_data.get(employee, 0.0)
-        overtime_to_be_paid[employee] = max(0.0, overtime_hours - debit_hours) * OVERTIME_RATE_PER_HOUR
-        remaining_debit[employee] = max(0.0, debit_hours - overtime_hours)
-
-    payload = json.dumps({"overtime_to_be_paid_in_rupiah": overtime_to_be_paid, "remaining_debit_hours": remaining_debit}, ensure_ascii=False, indent=2)
+    payload = calculate_overtime_pay_and_remaining_debit_from_file(args.input)
 
     if args.out:
         output_path = Path(OUTPUT_FOLDER) / args.out

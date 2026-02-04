@@ -54,8 +54,12 @@ def calculate_valid_invalid_working_days_from_file(input_file = "report_scan_gps
     payload = json.dumps(mapping, ensure_ascii=False, indent=2)
     employee_to_date_attendances = get_date_to_attendances(json.loads(payload))
 
-    date_to_attendances = next(iter(employee_to_date_attendances.values()))
-    date = next(iter(date_to_attendances.keys()))
+    try: 
+        date_to_attendances = next(iter(employee_to_date_attendances.values()))
+        date = next(iter(date_to_attendances.keys()))
+    except StopIteration:
+        print("WARNING: No attendance records found in the input file, can't calculate valid/invalid working days.")
+        return json.dumps({}, ensure_ascii=False, indent=2)
     parsed_date = datetime.strptime(date, "%Y-%m-%d")
     number_of_days = _get_number_of_days_in_month(parsed_date.year, parsed_date.month)
 

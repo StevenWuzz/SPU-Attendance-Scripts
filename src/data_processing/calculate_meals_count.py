@@ -23,7 +23,7 @@ LUNCH = "Lunch"
 DINNER = "Dinner"
 
 
-def calculate_meal_pay_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls") -> str:
+def calculate_meals_count_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls") -> str:
     filtered_records = generate_filtered_report(input_file, include_type=MEAL_TYPES)
     meal_hours_breakdown: Dict[str, List[Dict[str, Union[float, bool]]]] = {}
     total_meal_count: Dict[str, int] = {}
@@ -156,7 +156,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    meal_calculation = calculate_meal_pay_from_file(args.input)
+    meal_calculation = calculate_meals_count_from_file(args.input)
     if args.out:
         output_path = Path(OUTPUT_FOLDER) / args.out
         output_path.parent.mkdir(parents=True, exist_ok=True)
