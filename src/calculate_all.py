@@ -20,14 +20,14 @@ def _collect_employee_names(*maps: Dict[str, object]) -> Set[str]:
     return employees
 
 
-def calculate_all_from_file(input_path: str) -> str:
+def calculate_all_from_file(input_path: str, start_date = None) -> str:
     overtime_payload = json.loads(
-        calculate_overtime_pay_and_remaining_debit_from_file(input_path)
+        calculate_overtime_pay_and_remaining_debit_from_file(input_path, start_date)
     )
     working_days_payload = json.loads(
-        calculate_valid_invalid_working_days_from_file(input_path)
+        calculate_valid_invalid_working_days_from_file(input_path, start_date)
     )
-    meals_payload = json.loads(calculate_meals_count_from_file(input_path))
+    meals_payload = json.loads(calculate_meals_count_from_file(input_path, start_date))
 
     overtime_to_be_paid = overtime_payload.get("overtime_to_be_paid_in_rupiah", {})
     remaining_debit = overtime_payload.get("remaining_debit_hours", {})
@@ -71,8 +71,14 @@ def main() -> None:
     parser.add_argument(
         "--input",
         "-i",
-        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls",
+        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx",
         help="Path to the XLS export.",
+    )
+    parser.add_argument(
+        "--date",
+        "-d",
+        default=None,
+        help="Starting date of the resulting filtered report.",
     )
     parser.add_argument(
         "--out",
@@ -81,15 +87,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    payload = calculate_all_from_file(args.input)
-
-    if args.out:
-        output_path = Path(OUTPUT_FOLDER) / args.out
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as handle:
-            handle.write(payload)
-    else:
-        print(payload)
+    payload = calculate_all_from_file(args.input, args.date)
+    output_path = Path(OUTPUT_FOLDER) / args.out
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        handle.write(payload)
 
 if __name__ == "__main__":
     main()

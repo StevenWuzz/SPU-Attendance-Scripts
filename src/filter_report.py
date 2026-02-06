@@ -3,12 +3,18 @@
 
 import json
 from collections import defaultdict
-from typing import DefaultDict, Dict, List, Tuple
+from datetime import date, datetime
+from typing import DefaultDict, Dict, List, Optional, Tuple, Union
 
 import xlrd
 
+from src.utils import parse_datetime
 
-def _build_map(path: str, include_type: Dict) -> Dict[str, List[Tuple[str, str, str]]]:
+def _build_map(
+    path: str,
+    include_type: Dict,
+    start_datetime: datetime,
+) -> Dict[str, List[Tuple[str, str, str]]]:
     """Return Nama Karyawan -> list of (Tipe Absensi, Tanggal Absensi, Alamat)."""
     workbook = xlrd.open_workbook(path)
     sheet = workbook.sheet_by_index(0)
@@ -34,6 +40,11 @@ def _build_map(path: str, include_type: Dict) -> Dict[str, List[Tuple[str, str, 
 
         raw_date = row[col_index["Tanggal Absensi"]]
         tanggal_absensi = _extract_datetime(raw_date, workbook)
+        parsed_datetime = _parse_row_datetime(tanggal_absensi)
+        if not parsed_datetime:
+            continue
+        if start_datetime is not None and parsed_datetime < start_datetime:
+            continue
 
         records[name].append((tipe_absensi, tanggal_absensi))
 
@@ -59,7 +70,54 @@ def _extract_datetime(raw_value, workbook) -> str:
     return text
 
 
-def generate_filtered_report(input_path: str, include_type: Dict) -> Dict[str, List[Tuple[str, str, str]]]:
-    mapping = _build_map(input_path, include_type)
+def generate_filtered_report(
+    input_path: str,
+    include_type: Dict,
+    start_date: Optional[Union[str, date, datetime]] = None,
+) -> Dict[str, List[Tuple[str, str, str]]]:
+    start_datetime = _normalize_start_date(start_date) if start_date is not None else None
+    mapping = _build_map(input_path, include_type, start_datetime)
     payload = json.dumps(mapping, ensure_ascii=False, indent=2)
     return json.loads(payload)
+
+
+def _parse_row_datetime(value: str) -> Optional[datetime]:
+    parsed = parse_datetime(str(value))
+    if parsed:
+        return parsed
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    for fmt in ("%Y-%m-%d",):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+
+    return None
+
+
+def _normalize_start_date(value: Optional[Union[str, date, datetime]]) -> datetime:
+    if isinstance(value, datetime):
+        return value
+
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+
+    text = str(value).strip()
+    if not text:
+        now = datetime.now()
+        return datetime(now.year, now.month, 1)
+
+    parsed = parse_datetime(text)
+    if parsed:
+        return parsed
+
+    try:
+        return datetime.strptime(text, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError(
+            "start_date must be a datetime/date or a string in YYYY-MM-DD or YYYY-MM-DD HH:MM[:SS] format."
+        ) from exc

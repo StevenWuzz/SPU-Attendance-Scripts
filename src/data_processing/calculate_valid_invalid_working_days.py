@@ -49,8 +49,8 @@ def _count_valid_invalid_days(valid_value: float, invalid_value: float, is_valid
         invalid_value = max(invalid_value - step, -step)
     return valid_value, invalid_value
 
-def calculate_valid_invalid_working_days_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls") -> str:
-    mapping = generate_filtered_report(input_file, include_type=ATTENDANCE_TYPES)
+def calculate_valid_invalid_working_days_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx", start_date = None) -> str:
+    mapping = generate_filtered_report(input_file, ATTENDANCE_TYPES, start_date)
     payload = json.dumps(mapping, ensure_ascii=False, indent=2)
     employee_to_date_attendances = get_date_to_attendances(json.loads(payload))
 
@@ -142,8 +142,14 @@ def main() -> None:
     parser.add_argument(
         "--input",
         "-i",
-        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls",
+        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx",
         help="Path to the XLS export"
+    )
+    parser.add_argument(
+        "--date",
+        "-d",
+        default=None,
+        help="Starting date of the resulting filtered report.",
     )
     parser.add_argument(
         "--out",
@@ -152,14 +158,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    output = calculate_valid_invalid_working_days_from_file(args.input)
-    if args.out:
-        output_path = Path(OUTPUT_FOLDER) / args.out
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as handle:
-            handle.write(output)
-    else:
-        print(output)
+    output = calculate_valid_invalid_working_days_from_file(args.input, args.date)
+    output_path = Path(OUTPUT_FOLDER) / args.out
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        handle.write(output)
 
 if __name__ == "__main__":
     main()

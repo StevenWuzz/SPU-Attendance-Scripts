@@ -23,8 +23,8 @@ LUNCH = "Lunch"
 DINNER = "Dinner"
 
 
-def calculate_meals_count_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls") -> str:
-    filtered_records = generate_filtered_report(input_file, include_type=MEAL_TYPES)
+def calculate_meals_count_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx", start_date = None) -> str:
+    filtered_records = generate_filtered_report(input_file, MEAL_TYPES, start_date)
     meal_hours_breakdown: Dict[str, List[Dict[str, Union[float, bool]]]] = {}
     total_meal_count: Dict[str, int] = {}
     
@@ -146,8 +146,14 @@ def main() -> None:
     parser.add_argument(
         "--input",
         "-i",
-        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls",
+        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx",
         help="Path to the XLS export.",
+    )
+    parser.add_argument(
+        "--date",
+        "-d",
+        default=None,
+        help="Starting date of the resulting filtered report.",
     )
     parser.add_argument(
         "--out",
@@ -156,14 +162,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    meal_calculation = calculate_meals_count_from_file(args.input)
-    if args.out:
-        output_path = Path(OUTPUT_FOLDER) / args.out
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as handle:
-            handle.write(meal_calculation)
-    else:
-        print(meal_calculation)
+    meal_calculation = calculate_meals_count_from_file(args.input, args.date)
+    output_path = Path(OUTPUT_FOLDER) / args.out
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        handle.write(meal_calculation)
 
 if __name__ == "__main__":
     main()

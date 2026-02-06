@@ -3,6 +3,7 @@
 
 import argparse
 import json
+from collections import defaultdict
 from datetime import datetime, time
 from pathlib import Path
 from typing import Dict
@@ -19,10 +20,12 @@ CHECK_OUT_TYPES = {ABSENSI_PULANG, A_OUT, SELESAI_KERJA_DI_RUMAH}
 
 
 def _calculate_debit(data) -> Dict[str, float]:
-    summary: Dict[str, float] = {}
+    debit_summary: Dict[str, float] = {}
+    employee_to_debit_breakdown: Dict[str, Dict[str, float]] = {}
 
     for employee, records in data.items():
         debit_total = 0.0  # hours
+        debit_calculation: Dict[str, float] = defaultdict(int)
 
         for record in records:
             if len(record) < 2:
@@ -39,20 +42,24 @@ def _calculate_debit(data) -> Dict[str, float]:
             delta_start_hours = (parsed - target_start_dt).total_seconds() / 3600.0
             delta_end_hours = (parsed - target_end_dt).total_seconds() / 3600.0
 
+            date = parsed.date().isoformat()
             if attendance_type in CHECK_IN_TYPES and LATE_GRACE_PERIOD <= delta_start_hours:
                 debit_total += delta_start_hours
-            elif attendance_type in CHECK_OUT_TYPES and delta_end_hours <= 0:
+                debit_calculation[date] += delta_start_hours
+            elif attendance_type in CHECK_OUT_TYPES and delta_end_hours < 0:
                 debit_total += -delta_end_hours
+                debit_calculation[date] += -delta_end_hours
 
-        summary[employee] = debit_total
+        debit_summary[employee] = debit_total
+        employee_to_debit_breakdown[employee] = debit_calculation
 
-    return summary
+    return debit_summary, employee_to_debit_breakdown
 
-def calculate_debit_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls") -> str:
-    mapping = generate_filtered_report(input_file, include_type= ATTENDANCE_TYPES)
+def calculate_debit_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx", start_date = None) -> str:
+    mapping = generate_filtered_report(input_file, ATTENDANCE_TYPES, start_date)
     payload = json.dumps(mapping, ensure_ascii=False, indent=2)
-    statistics = _calculate_debit(json.loads(payload))
-    return json.dumps(statistics, ensure_ascii=False, indent=2)
+    statistics, breakdown = _calculate_debit(json.loads(payload))
+    return json.dumps({"debit_summary": statistics, "employee_debit_breakdown": breakdown}, ensure_ascii=False, indent=2)
     
 
 def main() -> None:
@@ -62,8 +69,14 @@ def main() -> None:
     parser.add_argument(
         "--input",
         "-i",
-        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls",
+        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx",
         help="Path to the XLS export.",
+    )
+    parser.add_argument(
+        "--date",
+        "-d",
+        default=None,
+        help="Starting date of the resulting filtered report.",
     )
     parser.add_argument(
         "--out",
@@ -72,21 +85,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    mapping = generate_filtered_report(args.input, include_type= ATTENDANCE_TYPES)
-    payload = json.dumps(mapping, ensure_ascii=False, indent=2)
-    json_data = json.loads(payload)
-
-    statistics = _calculate_debit(json_data)
-    output = json.dumps({"attendance": json_data, "debit_hours": statistics}, ensure_ascii=False, indent=2)
-    
-    if args.out:
-        output_path = Path(OUTPUT_FOLDER) / args.out
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as handle:
-            handle.write(output)
-    else:
-        print(output)
-
+    output = calculate_debit_from_file(args.input, args.date)
+    output_path = Path(OUTPUT_FOLDER) / args.out
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        handle.write(output)
 
 if __name__ == "__main__":
     main()

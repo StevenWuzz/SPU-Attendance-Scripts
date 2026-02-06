@@ -44,14 +44,14 @@ def _calculate_overtime_durations(
 
             if attendance_type == "Mulai Lembur" and last_end is not None:
                 end_dt, end_time = last_end
-                hours = (end_dt - parsed).total_seconds() / 3600.0
+                hours = max((end_dt - parsed).total_seconds() / 3600.0, 8.0)
                 same_date = parsed.date() == end_dt.date()
                 sessions.append(
                     {
                         "mulai": recorded_time,
                         "selesai": end_time,
                         "hours": hours,
-                        "isValid": same_date and hours <= 8.0,
+                        "isValid": same_date,
                     }
                 )
                 last_end = None
@@ -70,14 +70,14 @@ def _calculate_total_overtime(
     for employee, sessions in durations.items():
         total = 0.0
         for session in sessions:
-            if session.get("valid"):
+            if session.get("isValid"):
                 total += float(session.get("hours", 0.0) or 0.0)
         total_overtime_hours[employee] = total
 
     return total_overtime_hours
 
-def calculate_total_overtime_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls") -> str:
-    filtered = generate_filtered_report(input_file, include_type=OVERTIME_TYPES)
+def calculate_total_overtime_from_file(input_file = "report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx", start_date = None) -> str:
+    filtered = generate_filtered_report(input_file, OVERTIME_TYPES, start_date)
     durations = _calculate_overtime_durations(filtered)
     totals = _calculate_total_overtime(durations)
     payload = json.dumps({"overtime_sessions": durations, "total_overtime_hours": totals}, ensure_ascii=False, indent=2)
@@ -91,8 +91,14 @@ def main() -> None:
     parser.add_argument(
         "--input",
         "-i",
-        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xls",
+        default="report_scan_gps_2025-12-01_2025-12-31_20260101090802.xlsx",
         help="Path to the XLS export.",
+    )
+    parser.add_argument(
+        "--date",
+        "-d",
+        default=None,
+        help="Starting date of the resulting filtered report.",
     )
     parser.add_argument(
         "--out",
@@ -101,19 +107,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    filtered = generate_filtered_report(args.input, include_type=OVERTIME_TYPES)
-    durations = _calculate_overtime_durations(filtered)
-    totals = _calculate_total_overtime(durations)
-    payload = json.dumps({"total_overtime_hours": totals, "overtime_sessions": durations}, ensure_ascii=False, indent=2)
-
-    if args.out:
-        output_path = Path(OUTPUT_FOLDER) / args.out
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as handle:
-            handle.write(payload)
-    else:
-        print(payload)
-
+    payload = calculate_total_overtime_from_file(args.input, args.date)
+    output_path = Path(OUTPUT_FOLDER) / args.out
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as handle:
+        handle.write(payload)
 
 if __name__ == "__main__":
     main()
